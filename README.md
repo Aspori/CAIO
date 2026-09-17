@@ -1,2 +1,2 @@
-# Dashboard de Análise Financeira Pessoal
-Dashboard de análise financeira pessoal desenvolvido em Java com Spring Boot, que recebe extratos bancários (CSV/OFX), categoriza as transações automaticamente por regras e palavras-chave, e expõe uma API REST com insights como gastos por categoria, evolução mensal e projeção de saldo futuro. O backend inclui autenticação JWT, persistência em PostgreSQL e uma camada de análise dedicada a transformar dados brutos em decisões financeiras mais claras.
+# CAIO - Centro de Armazenamento de Inventário Organizacional
+Sistema de gerenciamento de inventário desenvolvido em Java com Spring Boot, que permite o cadastro, atualização e consulta de produtos, além de gerar relatórios e análises sobre o estoque. O backend inclui autenticação JWT, persistência em PostgreSQL e uma camada de análise dedicada a transformar dados brutos em decisões logísticas mais claras.
