@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Produtos · Prateleira</title><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="style.css"></head>
+<body>
+<div class="app">
+  <aside class="side">
+    <a href="index.html" class="logo"><i></i>Prateleira</a>
+    <a href="app.html" class="on">Produtos</a>
+    <a href="/movimentacoes.html">Movimentações</a>
+    <a href="/relatorios.html">Relatórios</a>
+    <a href="/logout" class="exit">Sair</a>
+  </aside>
+  <main class="main">
+    <div class="head"><h1>Produtos</h1></div>
+
+    <input class="tab-radio" type="radio" name="tab" id="t-tab" checked>
+    <input class="tab-radio" type="radio" name="tab" id="t-crud">
+    <div class="tabs" role="tablist">
+      <label for="t-tab">Tabela</label>
+      <label for="t-crud">Cadastro</label>
+    </div>
+
+    <div class="panels">
+      <!-- VISUALIZAÇÃO EM TABELA -->
+      <section class="panel p-tab">
+        <div class="kpis">
+          <div class="card"><strong id="k-total">0</strong><span>Produtos cadastrados</span></div>
+          <div class="card"><strong id="k-baixo">0</strong><span>Com estoque baixo</span></div>
+          <div class="card"><strong id="k-falta">0</strong><span>Em falta</span></div>
+        </div>
+        <div class="toolbar">
+          <input id="busca" type="search" placeholder="Buscar produto ou código" aria-label="Buscar produto">
+          <select id="filtro-cat" aria-label="Filtrar por categoria"><option>Todas as categorias</option><option>Mercearia</option><option>Bebidas</option><option>Padaria</option></select>
+        </div>
+        <div class="card table-wrap">
+          <table>
+            <thead><tr><th>Código</th><th>Produto</th><th>Categoria</th><th class="num">Preço</th><th class="num">Estoque</th><th>Situação</th><th></th></tr></thead>
+            <tbody id="tabela"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- CRUD -->
+      <section class="panel p-crud">
+        <div class="crud-grid">
+          <form class="card" id="form-produto">
+            <h2 id="titulo-form">Novo produto</h2>
+            <p class="sub">Preencha os dados e salve.</p>
+            <label for="nome">Nome</label><input id="nome" placeholder="Ex.: Café 500g">
+            <div class="form-row">
+              <div><label for="cod">Código</label><input id="cod" placeholder="0007"></div>
+              <div><label for="cat">Categoria</label><select id="cat"><option>Mercearia</option><option>Bebidas</option><option>Padaria</option></select></div>
+            </div>
+            <div class="form-row">
+              <div><label for="custo">Preço de custo</label><input id="custo" inputmode="decimal" placeholder="0,00"></div>
+              <div><label for="venda">Preço de venda</label><input id="venda" inputmode="decimal" placeholder="0,00"></div>
+            </div>
+            <div class="form-row">
+              <div><label for="qtd">Quantidade</label><input id="qtd" type="number" min="0" placeholder="0"><small class="dica" id="dica-qtd" hidden>Para mudar, use Venda ou Entrada.</small></div>
+              <div><label for="min">Estoque mínimo</label><input id="min" type="number" min="0" placeholder="5"></div>
+            </div>
+            <p class="erro" id="erro" role="alert"></p>
+            <div class="form-actions"><button class="btn btn-primary" type="submit">Salvar produto</button><button class="btn btn-ghost" type="button" id="limpar">Limpar</button></div>
+          </form>
+
+          <div class="card list">
+            <h2>Cadastrados recentemente</h2>
+            <ul id="recentes"></ul>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+<dialog id="dlg-entrada" class="modal">
+  <form id="form-entrada">
+    <h2>Entrada de mercadoria</h2>
+    <p class="sub" id="entrada-produto"></p>
+    <label for="ent-qtd">Quantidade que chegou</label>
+    <input id="ent-qtd" type="number" min="1" max="100000" placeholder="Ex.: 12" required>
+    <label for="ent-entregou">Quem entregou</label>
+    <input id="ent-entregou" maxlength="80" placeholder="Fornecedor ou entregador" required>
+    <label for="ent-recebeu">Quem recebeu</label>
+    <input id="ent-recebeu" maxlength="80" placeholder="Nome de quem recebeu" required>
+    <p class="erro" id="erro-entrada" role="alert"></p>
+    <div class="form-actions"><button class="btn btn-primary" type="submit">Confirmar entrada</button><button class="btn btn-ghost" type="button" id="cancela-entrada">Cancelar</button></div>
+  </form>
+</dialog>
+<dialog id="dlg-venda" class="modal">
+  <form id="form-venda">
+    <h2>Confirmar venda</h2>
+    <p class="sub" id="venda-produto"></p>
+    <label for="venda-entregou">Quem entregou</label>
+    <input id="venda-entregou" maxlength="80" placeholder="Nome de quem entregou o produto" required>
+    <label for="venda-recebeu">Quem recebeu</label>
+    <input id="venda-recebeu" maxlength="80" placeholder="Nome de quem recebeu o produto" required>
+    <p class="erro" id="erro-venda" role="alert"></p>
+    <div class="form-actions"><button class="btn btn-primary" type="submit">Confirmar venda</button><button class="btn btn-ghost" type="button" id="cancela-venda">Cancelar</button></div>
+  </form>
+</dialog>
+<script>
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const brl=n=>n.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+const num=v=>String(v).trim().replace(',','.');
+let produtos=[], editId=null;
+
+async function api(url,opts={}){
+  const r=await fetch(url,{headers:{'Content-Type':'application/json'},...opts});
+  if(r.status===401){location.href='/login.html';throw new Error('login')}
+  const d=await r.json().catch(()=>({}));
+  if(!r.ok) throw new Error(d.erro||'Algo deu errado. Tente de novo.');
+  return d;
+}
+function situacao(p){
+  if(p.qtd===0) return ['b-bad','Em falta'];
+  if(p.qtd<=p.minimo) return ['b-warn','Estoque baixo'];
+  return ['b-ok','Em estoque'];
+}
+function render(){
+  $('k-total').textContent=produtos.length;
+  $('k-baixo').textContent=produtos.filter(p=>p.qtd>0&&p.qtd<=p.minimo).length;
+  $('k-falta').textContent=produtos.filter(p=>p.qtd===0).length;
+  const q=$('busca').value.toLowerCase(), cat=$('filtro-cat').value;
+  const lista=produtos.filter(p=>(!q||p.nome.toLowerCase().includes(q)||p.codigo.toLowerCase().includes(q))&&(cat.startsWith('Todas')||p.categoria===cat));
+  $('tabela').innerHTML=lista.length?lista.map(p=>{const [c,t]=situacao(p);return `<tr><td>${esc(p.codigo)}</td><td>${esc(p.nome)}</td><td>${esc(p.categoria)}</td><td class="num">${brl(p.venda)}</td><td class="num">${p.qtd}</td><td><span class="badge ${c}">${t}</span></td><td><div class="acts"><button class="btn btn-primary btn-sm" data-venda="${p.id}" ${p.qtd===0?'disabled':''}>Vender</button><button class="btn btn-ghost btn-sm" data-entrada="${p.id}">Entrada</button><button class="btn btn-ghost btn-sm" data-edit="${p.id}">Editar</button></div></td></tr>`}).join(''):'<tr><td colspan="7">Nenhum produto encontrado. Use a aba Cadastro para adicionar.</td></tr>';
+  $('recentes').innerHTML=produtos.slice(0,5).map(p=>`<li><div>${esc(p.nome)}<br><small>${esc(p.codigo)} · ${esc(p.categoria)} · ${p.qtd} un.</small></div><div class="acts"><button class="btn btn-primary btn-sm" data-venda="${p.id}" ${p.qtd===0?'disabled':''}>Vender</button><button class="btn btn-ghost btn-sm" data-entrada="${p.id}">Entrada</button><button class="btn btn-ghost btn-sm" data-edit="${p.id}">Editar</button><button class="btn btn-danger btn-sm" data-del="${p.id}">Excluir</button></div></li>`).join('')||'<li><small>Nenhum produto cadastrado ainda.</small></li>';
+}
+async function carregar(){produtos=await api('/api/produtos');render()}
+function limpar(){
+  editId=null;$('form-produto').reset();$('erro').textContent='';$('qtd').disabled=false;$('dica-qtd').hidden=true;
+  $('titulo-form').textContent='Novo produto';
+}
+function editar(id){
+  const p=produtos.find(x=>x.id===id);if(!p)return;
+  editId=id;$('titulo-form').textContent='Editar produto';
+  $('nome').value=p.nome;$('cod').value=p.codigo;$('cat').value=p.categoria;
+  $('custo').value=p.custo;$('venda').value=p.venda;$('qtd').value=p.qtd;$('min').value=p.minimo;
+  $('qtd').disabled=true;$('dica-qtd').hidden=false;$('t-crud').checked=true;
+}
+$('form-produto').addEventListener('submit',async e=>{
+  e.preventDefault();$('erro').textContent='';
+  const body=JSON.stringify({nome:$('nome').value,codigo:$('cod').value,categoria:$('cat').value,custo:num($('custo').value),venda:num($('venda').value),qtd:$('qtd').value,minimo:$('min').value});
+  try{
+    await api(editId?`/api/produtos/${editId}`:'/api/produtos',{method:editId?'PUT':'POST',body});
+    limpar();await carregar();$('t-tab').checked=true;
+  }catch(err){$('erro').textContent=err.message}
+});
+$('limpar').addEventListener('click',limpar);
+$('busca').addEventListener('input',render);
+$('filtro-cat').addEventListener('change',render);
+document.addEventListener('click',async e=>{
+  const ed=e.target.closest('[data-edit]'),del=e.target.closest('[data-del]'),ven=e.target.closest('[data-venda]'),ent=e.target.closest('[data-entrada]');
+  if(ent){entradaId=+ent.dataset.entrada;const p=produtos.find(x=>x.id===entradaId);$('entrada-produto').textContent=p?p.nome:'';$('form-entrada').reset();$('erro-entrada').textContent='';$('dlg-entrada').showModal();$('ent-qtd').focus()}
+  if(ed) editar(+ed.dataset.edit);
+  if(ven){vendaId=+ven.dataset.venda;const p=produtos.find(x=>x.id===vendaId);$('venda-produto').textContent=p?p.nome:'';$('form-venda').reset();$('erro-venda').textContent='';$('dlg-venda').showModal();$('venda-entregou').focus()}
+  if(del&&confirm('Excluir este produto?')){await api(`/api/produtos/${del.dataset.del}`,{method:'DELETE'});await carregar()}
+});
+let entradaId=null;
+$('form-entrada').addEventListener('submit',async e=>{
+  e.preventDefault();$('erro-entrada').textContent='';
+  try{
+    await api(`/api/produtos/${entradaId}/entrada`,{method:'POST',body:JSON.stringify({quantidade:$('ent-qtd').value,entregue_por:$('ent-entregou').value,recebido_por:$('ent-recebeu').value})});
+    $('dlg-entrada').close();
+  }catch(err){$('erro-entrada').textContent=err.message}
+  await carregar();
+});
+$('cancela-entrada').addEventListener('click',()=>$('dlg-entrada').close());
+let vendaId=null;
+$('form-venda').addEventListener('submit',async e=>{
+  e.preventDefault();$('erro-venda').textContent='';
+  try{
+    await api(`/api/produtos/${vendaId}/venda`,{method:'POST',body:JSON.stringify({entregue_por:$('venda-entregou').value,recebido_por:$('venda-recebeu').value})});
+    $('dlg-venda').close();
+  }catch(err){$('erro-venda').textContent=err.message}
+  await carregar();
+});
+$('cancela-venda').addEventListener('click',()=>$('dlg-venda').close());
+carregar();
+</script>
+</body></html>

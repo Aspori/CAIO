@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Entrar · Prateleira</title><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="style.css"></head>
+<body>
+<div class="login-wrap">
+  <aside class="login-side">
+    <a href="index.html" class="logo"><i></i>Prateleira</a>
+    <h2>Seu estoque em ordem, do balcão ao celular.</h2>
+    <small>Feito para pequenos comércios.</small>
+  </aside>
+  <main class="login-form">
+    <form class="card" id="form-login">
+      <h1>Entrar</h1>
+      <p class="sub">Use seu e-mail e senha para acessar o estoque.</p>
+      <label for="email">E-mail</label>
+      <input id="email" type="email" placeholder="voce@loja.com" required>
+      <label for="senha">Senha</label>
+      <input id="senha" type="password" placeholder="Sua senha" required>
+      <p class="erro" id="erro" role="alert"></p>
+      <button class="btn btn-primary" type="submit">Entrar</button>
+      <p class="small">Ainda não tem conta? <a href="cadastro.html">Criar conta</a></p>
+      <p class="small"><a href="index.html">Voltar para o início</a></p>
+    </form>
+  </main>
+</div>
+<script>
+document.getElementById('form-login').addEventListener('submit',async e=>{
+  e.preventDefault();
+  const erro=document.getElementById('erro');erro.textContent='';
+  const r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:document.getElementById('email').value,senha:document.getElementById('senha').value})});
+  if(r.ok) location.href='/app.html';
+  else erro.textContent=(await r.json().catch(()=>({}))).erro||'Não foi possível entrar.';
+});
+</script>
+</body></html>

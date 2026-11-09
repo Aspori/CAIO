@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Relatórios · Prateleira</title><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="style.css"></head>
+<body>
+<div class="app">
+  <aside class="side">
+    <a href="/" class="logo"><i></i>Prateleira</a>
+    <a href="/app.html">Produtos</a>
+    <a href="/movimentacoes.html">Movimentações</a>
+    <a href="/relatorios.html" class="on">Relatórios</a>
+    <a href="/logout" class="exit">Sair</a>
+  </aside>
+  <main class="main">
+    <div class="head">
+      <h1>Relatórios</h1>
+      <select id="periodo" aria-label="Período">
+        <option value="7">Últimos 7 dias</option>
+        <option value="30" selected>Últimos 30 dias</option>
+        <option value="90">Últimos 90 dias</option>
+      </select>
+    </div>
+    <div class="tabs" id="metricas">
+      <button type="button" data-m="vendas" aria-pressed="true">Vendas</button>
+      <button type="button" data-m="lucro" aria-pressed="false">Lucro</button>
+      <button type="button" data-m="entradas" aria-pressed="false">Entradas</button>
+      <button type="button" data-m="saidas" aria-pressed="false">Saídas</button>
+    </div>
+    <div class="card" style="margin-bottom:1.2rem"><strong style="font-size:1.7rem;letter-spacing:-.03em" id="k-total">–</strong><br><span style="color:var(--muted);font-size:.85rem" id="k-rotulo"></span></div>
+    <div class="card">
+      <svg id="grafico" class="chart" viewBox="0 0 720 320" role="img" aria-label="Gráfico de linhas por dia"></svg>
+      <p class="vazio" id="vazio" hidden>Nada registrado neste período para este gráfico.</p>
+    </div>
+    <p class="vazio" style="margin-top:1rem">Vendas e lucro em R$, entradas e saídas em unidades. Lucro = (preço de venda − preço de custo) × quantidade vendida, com os preços da hora da venda.</p>
+  </main>
+</div>
+<script>
+const $=id=>document.getElementById(id);
+const METRICAS={
+  vendas:{nome:'Vendas',un:'R$',f:m=>m.tipo==='venda'?m.quantidade*(m.preco_venda||0):0},
+  lucro:{nome:'Lucro',un:'R$',f:m=>m.tipo==='venda'?m.quantidade*((m.preco_venda||0)-(m.preco_custo||0)):0},
+  entradas:{nome:'Entradas',un:'un',f:m=>m.tipo==='entrada'?m.quantidade:0},
+  saidas:{nome:'Saídas',un:'un',f:m=>m.tipo==='venda'?m.quantidade:0}
+};
+let metrica='vendas',dias=30,rows=[];
+const pad=n=>String(n).padStart(2,'0');
+const chave=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const brl=n=>n.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+const fmt=(v,un)=>un==='R$'?brl(v):v.toLocaleString('pt-BR')+' un.';
+const nice=x=>{if(x<=0)return 1;const p=10**Math.floor(Math.log10(x)),f=x/p;return(f<=1?1:f<=2?2:f<=5?5:10)*p};
+
+function serie(){
+  const hoje=new Date(),dia=[];
+  for(let i=dias-1;i>=0;i--){const d=new Date(hoje.getFullYear(),hoje.getMonth(),hoje.getDate()-i);dia.push({d,k:chave(d),v:0})}
+  const idx=Object.fromEntries(dia.map((x,i)=>[x.k,i])),f=METRICAS[metrica].f;
+  rows.forEach(m=>{const i=idx[chave(new Date(m.criado_em))];if(i!==undefined)dia[i].v+=f(m)});
+  dia.forEach(x=>x.v=Math.round(x.v*100)/100);
+  return dia;
+}
+function desenhar(){
+  const {nome,un}=METRICAS[metrica],s=serie(),n=s.length,vals=s.map(x=>x.v);
+  const total=vals.reduce((a,b)=>a+b,0);
+  $('k-total').textContent=fmt(total,un);
+  $('k-rotulo').textContent=`${nome} nos últimos ${dias} dias`;
+  $('vazio').hidden=total!==0;
+  const maxv=Math.max(...vals,0),minv=Math.min(...vals,0);
+  let top=maxv>0?nice(maxv):(minv<0?0:1);
+  const bottom=minv<0?-nice(-minv):0;
+  if(un==='un')top=Math.max(top,4);
+  const W=720,H=320,L=64,R=16,T=16,B=36;
+  const X=i=>L+i*(W-L-R)/(n-1),Y=v=>T+(top-v)/(top-bottom)*(H-T-B);
+  let g='';
+  for(let k=0;k<=4;k++){
+    const v=bottom+(top-bottom)*k/4,y=Y(v);
+    const rot=un==='R$'?v.toLocaleString('pt-BR',{style:'currency',currency:'BRL',notation:'compact'}):v.toLocaleString('pt-BR',{maximumFractionDigits:2});
+    g+=`<line class="grid" x1="${L}" x2="${W-R}" y1="${y}" y2="${y}"/><text x="${L-8}" y="${y+4}" text-anchor="end">${rot}</text>`;
+  }
+  if(bottom<0)g+=`<line class="zero" x1="${L}" x2="${W-R}" y1="${Y(0)}" y2="${Y(0)}"/>`;
+  const passo=Math.ceil(n/8);
+  s.forEach((x,i)=>{if((n-1-i)%passo===0)g+=`<text x="${X(i)}" y="${H-12}" text-anchor="middle">${pad(x.d.getDate())}/${pad(x.d.getMonth()+1)}</text>`});
+  g+=`<polyline class="linha" points="${s.map((x,i)=>`${X(i)},${Y(x.v)}`).join(' ')}"/>`;
+  const r=n>45?2.5:4.5;
+  s.forEach((x,i)=>{g+=`<circle class="pt" cx="${X(i)}" cy="${Y(x.v)}" r="${r}"><title>${x.d.toLocaleDateString('pt-BR')}: ${fmt(x.v,un)}</title></circle>`});
+  $('grafico').innerHTML=g;
+}
+document.querySelectorAll('[data-m]').forEach(b=>b.addEventListener('click',()=>{
+  metrica=b.dataset.m;
+  document.querySelectorAll('[data-m]').forEach(x=>x.setAttribute('aria-pressed',x===b));
+  desenhar();
+}));
+$('periodo').addEventListener('change',e=>{dias=+e.target.value;desenhar()});
+(async()=>{
+  const r=await fetch('/api/relatorio');
+  if(r.status===401){location.href='/login.html';return}
+  rows=await r.json();desenhar();
+})();
+</script>
+</body></html>
