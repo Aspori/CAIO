@@ -3,7 +3,6 @@
 
 Sistema web de gerenciamento de estoque desenvolvido para pequenos comércios. Permite cadastrar produtos, controlar entradas e saídas, registrar vendas e acompanhar indicadores de desempenho.
 
-## 📸 Demonstração
 
 ## 📸 Demonstração do sistema
 
