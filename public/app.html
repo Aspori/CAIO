@@ -7,6 +7,7 @@
     <a href="app.html" class="on">Produtos</a>
     <a href="/movimentacoes.html">Movimentações</a>
     <a href="/relatorios.html">Relatórios</a>
+    <a href="/equipe.html" id="menu-equipe" hidden>Equipe</a>
     <a href="/logout" class="exit">Sair</a>
   </aside>
   <main class="main">
@@ -16,7 +17,7 @@
     <input class="tab-radio" type="radio" name="tab" id="t-crud">
     <div class="tabs" role="tablist">
       <label for="t-tab">Tabela</label>
-      <label for="t-crud">Cadastro</label>
+      <label for="t-crud" class="so-admin">Cadastro</label>
     </div>
 
     <div class="panels">
@@ -30,6 +31,7 @@
         <div class="toolbar">
           <input id="busca" type="search" placeholder="Buscar produto ou código" aria-label="Buscar produto">
           <select id="filtro-cat" aria-label="Filtrar por categoria"><option>Todas as categorias</option><option>Mercearia</option><option>Bebidas</option><option>Padaria</option></select>
+          <button class="btn btn-primary" type="button" id="abrir-multi" style="margin-left:auto">Venda múltipla</button>
         </div>
         <div class="card table-wrap">
           <table>
@@ -71,6 +73,28 @@
     </div>
   </main>
 </div>
+<dialog id="dlg-multi" class="modal modal-lg">
+  <form id="form-multi">
+    <h2>Venda múltipla</h2>
+    <p class="sub">Adicione os produtos e confirme para registrar tudo de uma vez.</p>
+    <div class="add-row">
+      <div><label for="m-prod">Produto</label><input id="m-prod" list="m-lista" placeholder="Digite o nome ou o código" autocomplete="off"></div>
+      <div><label for="m-qtd">Qtd.</label><input id="m-qtd" type="number" min="1" value="1"></div>
+      <button class="btn btn-ghost" type="button" id="m-add">Adicionar</button>
+    </div>
+    <datalist id="m-lista"></datalist>
+    <ul class="itens" id="m-itens"></ul>
+    <p class="total" id="m-total"></p>
+    <label for="m-entregou">Quem entregou</label>
+    <input id="m-entregou" maxlength="80" placeholder="Nome de quem entregou" required>
+    <label for="m-recebeu">Quem recebeu</label>
+    <input id="m-recebeu" maxlength="80" placeholder="Nome de quem recebeu" required>
+    <label for="m-contato">Contato (e-mail ou telefone)</label>
+    <input id="m-contato" maxlength="120" placeholder="Opcional">
+    <p class="erro" id="erro-multi" role="alert"></p>
+    <div class="form-actions"><button class="btn btn-primary" type="submit">Confirmar venda</button><button class="btn btn-ghost" type="button" id="cancela-multi">Cancelar</button></div>
+  </form>
+</dialog>
 <dialog id="dlg-entrada" class="modal">
   <form id="form-entrada">
     <h2>Entrada de mercadoria</h2>
@@ -93,6 +117,8 @@
     <input id="venda-entregou" maxlength="80" placeholder="Nome de quem entregou o produto" required>
     <label for="venda-recebeu">Quem recebeu</label>
     <input id="venda-recebeu" maxlength="80" placeholder="Nome de quem recebeu o produto" required>
+    <label for="venda-contato">Contato (e-mail ou telefone)</label>
+    <input id="venda-contato" maxlength="120" placeholder="Opcional">
     <p class="erro" id="erro-venda" role="alert"></p>
     <div class="form-actions"><button class="btn btn-primary" type="submit">Confirmar venda</button><button class="btn btn-ghost" type="button" id="cancela-venda">Cancelar</button></div>
   </form>
@@ -122,8 +148,8 @@ function render(){
   $('k-falta').textContent=produtos.filter(p=>p.qtd===0).length;
   const q=$('busca').value.toLowerCase(), cat=$('filtro-cat').value;
   const lista=produtos.filter(p=>(!q||p.nome.toLowerCase().includes(q)||p.codigo.toLowerCase().includes(q))&&(cat.startsWith('Todas')||p.categoria===cat));
-  $('tabela').innerHTML=lista.length?lista.map(p=>{const [c,t]=situacao(p);return `<tr><td>${esc(p.codigo)}</td><td>${esc(p.nome)}</td><td>${esc(p.categoria)}</td><td class="num">${brl(p.venda)}</td><td class="num">${p.qtd}</td><td><span class="badge ${c}">${t}</span></td><td><div class="acts"><button class="btn btn-primary btn-sm" data-venda="${p.id}" ${p.qtd===0?'disabled':''}>Vender</button><button class="btn btn-ghost btn-sm" data-entrada="${p.id}">Entrada</button><button class="btn btn-ghost btn-sm" data-edit="${p.id}">Editar</button></div></td></tr>`}).join(''):'<tr><td colspan="7">Nenhum produto encontrado. Use a aba Cadastro para adicionar.</td></tr>';
-  $('recentes').innerHTML=produtos.slice(0,5).map(p=>`<li><div>${esc(p.nome)}<br><small>${esc(p.codigo)} · ${esc(p.categoria)} · ${p.qtd} un.</small></div><div class="acts"><button class="btn btn-primary btn-sm" data-venda="${p.id}" ${p.qtd===0?'disabled':''}>Vender</button><button class="btn btn-ghost btn-sm" data-entrada="${p.id}">Entrada</button><button class="btn btn-ghost btn-sm" data-edit="${p.id}">Editar</button><button class="btn btn-danger btn-sm" data-del="${p.id}">Excluir</button></div></li>`).join('')||'<li><small>Nenhum produto cadastrado ainda.</small></li>';
+  $('tabela').innerHTML=lista.length?lista.map(p=>{const [c,t]=situacao(p);return `<tr><td>${esc(p.codigo)}</td><td>${esc(p.nome)}</td><td>${esc(p.categoria)}</td><td class="num">${brl(p.venda)}</td><td class="num">${p.qtd}</td><td><span class="badge ${c}">${t}</span></td><td><div class="acts"><button class="btn btn-primary btn-sm" data-venda="${p.id}" ${p.qtd===0?'disabled':''}>Vender</button><button class="btn btn-ghost btn-sm so-admin" data-entrada="${p.id}">Entrada</button><button class="btn btn-ghost btn-sm so-admin" data-edit="${p.id}">Editar</button></div></td></tr>`}).join(''):'<tr><td colspan="7">Nenhum produto encontrado. Use a aba Cadastro para adicionar.</td></tr>';
+  $('recentes').innerHTML=produtos.slice(0,5).map(p=>`<li><div>${esc(p.nome)}<br><small>${esc(p.codigo)} · ${esc(p.categoria)} · ${p.qtd} un.</small></div><div class="acts"><button class="btn btn-primary btn-sm" data-venda="${p.id}" ${p.qtd===0?'disabled':''}>Vender</button><button class="btn btn-ghost btn-sm so-admin" data-entrada="${p.id}">Entrada</button><button class="btn btn-ghost btn-sm so-admin" data-edit="${p.id}">Editar</button><button class="btn btn-danger btn-sm so-admin" data-del="${p.id}">Excluir</button></div></li>`).join('')||'<li><small>Nenhum produto cadastrado ainda.</small></li>';
 }
 async function carregar(){produtos=await api('/api/produtos');render()}
 function limpar(){
@@ -165,16 +191,51 @@ $('form-entrada').addEventListener('submit',async e=>{
   await carregar();
 });
 $('cancela-entrada').addEventListener('click',()=>$('dlg-entrada').close());
-let vendaId=null;
+let papel='admin',vendaId=null;
 $('form-venda').addEventListener('submit',async e=>{
   e.preventDefault();$('erro-venda').textContent='';
   try{
-    await api(`/api/produtos/${vendaId}/venda`,{method:'POST',body:JSON.stringify({entregue_por:$('venda-entregou').value,recebido_por:$('venda-recebeu').value})});
+    await api(`/api/produtos/${vendaId}/venda`,{method:'POST',body:JSON.stringify({entregue_por:$('venda-entregou').value,recebido_por:$('venda-recebeu').value,contato:$('venda-contato').value})});
     $('dlg-venda').close();
   }catch(err){$('erro-venda').textContent=err.message}
   await carregar();
 });
 $('cancela-venda').addEventListener('click',()=>$('dlg-venda').close());
-carregar();
+let carrinho=[];
+const rotulo=p=>`${p.codigo} · ${p.nome}`;
+function renderMulti(){
+  $('m-itens').innerHTML=carrinho.map(i=>{const p=produtos.find(x=>x.id===i.id);return `<li><span>${esc(p.nome)} × ${i.qtd}</span><span>${brl(p.venda*i.qtd)} <button class="btn btn-danger btn-sm" type="button" data-rm="${i.id}">Remover</button></span></li>`}).join('');
+  const total=carrinho.reduce((t,i)=>t+produtos.find(x=>x.id===i.id).venda*i.qtd,0);
+  $('m-total').textContent=carrinho.length?`Total: ${brl(total)}`:'Nenhum produto adicionado ainda.';
+}
+$('abrir-multi').addEventListener('click',()=>{
+  carrinho=[];$('form-multi').reset();$('erro-multi').textContent='';
+  $('m-lista').innerHTML=produtos.filter(p=>p.qtd>0).map(p=>`<option value="${esc(rotulo(p))}">${p.qtd} em estoque</option>`).join('');
+  renderMulti();$('dlg-multi').showModal();$('m-prod').focus();
+});
+function adicionar(){
+  $('erro-multi').textContent='';
+  const p=produtos.find(x=>rotulo(x).toLowerCase()===$('m-prod').value.trim().toLowerCase()),q=parseInt($('m-qtd').value,10);
+  if(!p){$('erro-multi').textContent='Escolha um produto da lista.';return}
+  if(!(q>=1)){$('erro-multi').textContent='Informe uma quantidade válida.';return}
+  const it=carrinho.find(i=>i.id===p.id);
+  if((it?it.qtd:0)+q>p.qtd){$('erro-multi').textContent=`Só há ${p.qtd} de ${p.nome} em estoque.`;return}
+  if(it)it.qtd+=q;else carrinho.push({id:p.id,qtd:q});
+  $('m-prod').value='';$('m-qtd').value=1;renderMulti();$('m-prod').focus();
+}
+$('m-add').addEventListener('click',adicionar);
+['m-prod','m-qtd'].forEach(id=>$(id).addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();adicionar()}}));
+$('m-itens').addEventListener('click',e=>{const r=e.target.closest('[data-rm]');if(r){carrinho=carrinho.filter(i=>i.id!==+r.dataset.rm);renderMulti()}});
+$('form-multi').addEventListener('submit',async e=>{
+  e.preventDefault();$('erro-multi').textContent='';
+  if(!carrinho.length){$('erro-multi').textContent='Adicione pelo menos um produto.';return}
+  try{
+    await api('/api/vendas',{method:'POST',body:JSON.stringify({itens:carrinho.map(i=>({produto_id:i.id,quantidade:i.qtd})),entregue_por:$('m-entregou').value,recebido_por:$('m-recebeu').value,contato:$('m-contato').value})});
+    $('dlg-multi').close();
+  }catch(err){$('erro-multi').textContent=err.message}
+  await carregar();
+});
+$('cancela-multi').addEventListener('click',()=>$('dlg-multi').close());
+fetch('/api/me').then(r=>r.json()).then(u=>{papel=u.papel;if(papel==='admin')$('menu-equipe').hidden=false;else document.body.classList.add('operador')}).catch(()=>{}).finally(carregar);
 </script>
 </body></html>

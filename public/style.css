@@ -111,3 +111,13 @@ input:disabled{opacity:.55;cursor:not-allowed}
 .chart .pt:hover{fill:var(--accent)}
 .vazio{color:var(--muted);font-size:.9rem;margin-top:.8rem}
 .vazio[hidden]{display:none}
+[hidden]{display:none!important}
+body.operador .so-admin{display:none!important}
+.acts{display:flex;gap:.4rem;flex-wrap:wrap}
+.modal-lg{width:min(560px,calc(100% - 2rem))}
+.add-row{display:grid;grid-template-columns:1fr 90px auto;gap:.6rem;align-items:end}
+.add-row label{margin-top:.2rem}
+.itens{padding:0;margin:.8rem 0 0}
+.itens li{list-style:none;display:flex;justify-content:space-between;align-items:center;gap:1rem;padding:.55rem 0;border-bottom:1px solid var(--line);font-size:.92rem}
+.itens li span:last-child{display:flex;align-items:center;gap:.6rem;white-space:nowrap}
+.total{margin:.6rem 0 0;font-weight:700}

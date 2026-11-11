@@ -7,6 +7,7 @@
     <a href="/app.html">Produtos</a>
     <a href="/movimentacoes.html" class="on">Movimentações</a>
     <a href="/relatorios.html">Relatórios</a>
+    <a href="/equipe.html" id="menu-equipe" hidden>Equipe</a>
     <a href="/logout" class="exit">Sair</a>
   </aside>
   <main class="main">
@@ -17,7 +18,7 @@
     </div>
     <div class="card table-wrap">
       <table>
-        <thead><tr><th>Data e hora</th><th>Produto</th><th>Entregue por</th><th>Recebido por</th><th>Tipo</th><th class="num">Quantidade</th></tr></thead>
+        <thead><tr><th>Data e hora</th><th>Produto</th><th>Entregue por</th><th>Recebido por</th><th>Contato</th><th>Registrado por</th><th>Tipo</th><th class="num">Quantidade</th></tr></thead>
         <tbody id="tabela"></tbody>
       </table>
     </div>
@@ -25,6 +26,7 @@
 </div>
 <script>
 const $=id=>document.getElementById(id);
+fetch('/api/me').then(r=>r.ok?r.json():null).then(u=>{if(u&&u.papel==='admin')$('menu-equipe').hidden=false});
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 (async()=>{
   const r=await fetch('/api/movimentacoes');
@@ -33,7 +35,7 @@ const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'
   const hoje=new Date().toLocaleDateString('pt-BR');
   $('k-hoje').textContent=ms.filter(m=>m.tipo==='venda'&&new Date(m.criado_em).toLocaleDateString('pt-BR')===hoje).reduce((t,m)=>t+m.quantidade,0);
   $('k-total').textContent=ms.length;
-  $('tabela').innerHTML=ms.length?ms.map(m=>`<tr><td>${new Date(m.criado_em).toLocaleString('pt-BR',{dateStyle:'short',timeStyle:'medium'})}</td><td>${esc(m.produto_nome)}</td><td>${esc(m.entregue_por||'—')}</td><td>${esc(m.recebido_por||'—')}</td><td><span class="badge ${m.tipo==='entrada'?'b-ok':'b-info'}">${m.tipo==='entrada'?'Entrada':'Venda'}</span></td><td class="num">${m.tipo==='entrada'?'+':'−'}${m.quantidade}</td></tr>`).join(''):'<tr><td colspan="6">Nenhuma movimentação ainda. Use Vender ou Entrada na tela de Produtos.</td></tr>';
+  $('tabela').innerHTML=ms.length?ms.map(m=>`<tr><td>${new Date(m.criado_em).toLocaleString('pt-BR',{dateStyle:'short',timeStyle:'medium'})}</td><td>${esc(m.produto_nome)}</td><td>${esc(m.entregue_por||'—')}</td><td>${esc(m.recebido_por||'—')}</td><td>${esc(m.contato||'—')}</td><td>${esc(m.registrado_por||'—')}</td><td><span class="badge ${m.tipo==='entrada'?'b-ok':'b-info'}">${m.tipo==='entrada'?'Entrada':'Venda'}</span></td><td class="num">${m.tipo==='entrada'?'+':'−'}${m.quantidade}</td></tr>`).join(''):'<tr><td colspan="8">Nenhuma movimentação ainda. Use Vender ou Entrada na tela de Produtos.</td></tr>';
 })();
 </script>
 </body></html>

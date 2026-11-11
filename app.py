@@ -1,4 +1,5 @@
 import os
+import re
 import sqlite3
 from functools import wraps
 
@@ -35,7 +36,10 @@ def init_db():
         CREATE TABLE IF NOT EXISTS usuarios(
             id INTEGER PRIMARY KEY,
             email TEXT UNIQUE NOT NULL,
-            senha_hash TEXT NOT NULL);
+            senha_hash TEXT NOT NULL,
+            papel TEXT NOT NULL DEFAULT 'admin',
+            dono_id INTEGER,
+            ativo INTEGER NOT NULL DEFAULT 1);
         CREATE TABLE IF NOT EXISTS produtos(
             id INTEGER PRIMARY KEY,
             usuario_id INTEGER NOT NULL REFERENCES usuarios(id),
@@ -56,13 +60,19 @@ def init_db():
             quantidade INTEGER NOT NULL,
             entregue_por TEXT,
             recebido_por TEXT,
+            registrado_por TEXT,
+            contato TEXT,
             preco_venda REAL,
             preco_custo REAL,
             criado_em TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')));
         """
     )
+    ucols = [r[1] for r in conn.execute("PRAGMA table_info(usuarios)")]
+    for c, tipo in (("papel", "TEXT NOT NULL DEFAULT 'admin'"), ("dono_id", "INTEGER"), ("ativo", "INTEGER NOT NULL DEFAULT 1")):
+        if c not in ucols:
+            conn.execute(f"ALTER TABLE usuarios ADD COLUMN {c} {tipo}")
     cols = [r[1] for r in conn.execute("PRAGMA table_info(movimentacoes)")]
-    for c in ("entregue_por", "recebido_por"):
+    for c in ("entregue_por", "recebido_por", "registrado_por", "contato"):
         if c not in cols:
             conn.execute(f"ALTER TABLE movimentacoes ADD COLUMN {c} TEXT")
     if "preco_venda" not in cols:
@@ -74,15 +84,41 @@ def init_db():
             "INSERT INTO usuarios(email, senha_hash) VALUES(?,?)",
             ("admin@loja.com", generate_password_hash("123456")),
         )
+    conn.execute("UPDATE usuarios SET dono_id=id WHERE dono_id IS NULL")
     conn.commit()
     conn.close()
+
+
+def atual():
+    """Usuário logado (lido do banco a cada pedido, só se estiver ativo)."""
+    if "uid" not in session:
+        return None
+    if "u" not in g:
+        g.u = db().execute(
+            "SELECT id, email, papel, dono_id FROM usuarios WHERE id=? AND ativo=1", (session["uid"],)).fetchone()
+    return g.u
+
+
+def loja():
+    """Id da loja (conta do admin) a que o usuário logado pertence."""
+    return atual()["dono_id"]
 
 
 def logado(f):
     @wraps(f)
     def wrap(*a, **k):
-        if "uid" not in session:
+        if not atual():
             return jsonify(erro="Faça login para continuar."), 401
+        return f(*a, **k)
+    return wrap
+
+
+def admin(f):
+    @wraps(f)
+    @logado
+    def wrap(*a, **k):
+        if atual()["papel"] != "admin":
+            return jsonify(erro="Só o administrador pode fazer isso."), 403
         return f(*a, **k)
     return wrap
 
@@ -106,16 +142,26 @@ def pagina_recursos():
 
 @app.get("/movimentacoes.html")
 def pagina_movimentacoes():
-    if "uid" not in session:
+    if not atual():
         return redirect("/login.html")
     return send_from_directory(PUBLIC, "movimentacoes.html")
 
 
 @app.get("/relatorios.html")
 def pagina_relatorios():
-    if "uid" not in session:
+    if not atual():
         return redirect("/login.html")
     return send_from_directory(PUBLIC, "relatorios.html")
+
+
+@app.get("/equipe.html")
+def pagina_equipe():
+    u = atual()
+    if not u:
+        return redirect("/login.html")
+    if u["papel"] != "admin":
+        return redirect("/app.html")
+    return send_from_directory(PUBLIC, "equipe.html")
 
 
 @app.get("/cadastro.html")
@@ -125,7 +171,7 @@ def pagina_cadastro():
 
 @app.get("/app.html")
 def pagina_app():
-    if "uid" not in session:
+    if not atual():
         return redirect("/login.html")
     return send_from_directory(PUBLIC, "app.html")
 
@@ -148,6 +194,8 @@ def api_login():
     u = db().execute("SELECT * FROM usuarios WHERE email=?", (d.get("email", "").strip().lower(),)).fetchone()
     if not u or not check_password_hash(u["senha_hash"], d.get("senha", "")):
         return jsonify(erro="E-mail ou senha incorretos."), 401
+    if not u["ativo"]:
+        return jsonify(erro="Esta conta está desativada. Fale com o administrador."), 403
     session["uid"] = u["id"]
     return jsonify(ok=True)
 
@@ -162,7 +210,8 @@ def api_registrar():
     if len(senha) < 6:
         return jsonify(erro="A senha precisa ter pelo menos 6 caracteres."), 400
     try:
-        cur = db().execute("INSERT INTO usuarios(email, senha_hash) VALUES(?,?)", (email, generate_password_hash(senha)))
+        cur = db().execute("INSERT INTO usuarios(email, senha_hash, papel) VALUES(?,?,'admin')", (email, generate_password_hash(senha)))
+        db().execute("UPDATE usuarios SET dono_id=id WHERE id=?", (cur.lastrowid,))
         db().commit()
     except sqlite3.IntegrityError:
         return jsonify(erro="Esse e-mail já tem conta. Tente entrar."), 409
@@ -194,17 +243,17 @@ def ler_produto(d):
 @app.get("/api/produtos")
 @logado
 def listar():
-    rows = db().execute("SELECT * FROM produtos WHERE usuario_id=? ORDER BY id DESC", (session["uid"],)).fetchall()
+    rows = db().execute("SELECT * FROM produtos WHERE usuario_id=? ORDER BY id DESC", (loja(),)).fetchall()
     return jsonify([dict(r) for r in rows])
 
 
 @app.post("/api/produtos")
-@logado
+@admin
 def criar():
     p, erro = ler_produto(request.get_json(silent=True) or {})
     if erro:
         return jsonify(erro=erro), 400
-    p["uid"] = session["uid"]
+    p["uid"] = loja()
     try:
         cur = db().execute(
             "INSERT INTO produtos(usuario_id,codigo,nome,categoria,custo,venda,qtd,minimo) VALUES(:uid,:codigo,:nome,:categoria,:custo,:venda,:qtd,:minimo)", p)
@@ -215,7 +264,7 @@ def criar():
 
 
 @app.put("/api/produtos/<int:pid>")
-@logado
+@admin
 def atualizar(pid):
     p, erro = ler_produto(request.get_json(silent=True) or {})
     if erro:
@@ -223,7 +272,7 @@ def atualizar(pid):
     try:
         cur = db().execute(
             "UPDATE produtos SET codigo=:codigo,nome=:nome,categoria=:categoria,custo=:custo,venda=:venda,minimo=:minimo WHERE id=:id AND usuario_id=:uid",
-            {**p, "id": pid, "uid": session["uid"]})
+            {**p, "id": pid, "uid": loja()})
         db().commit()
     except sqlite3.IntegrityError:
         return jsonify(erro="Já existe um produto com esse código."), 409
@@ -233,37 +282,67 @@ def atualizar(pid):
 
 
 @app.delete("/api/produtos/<int:pid>")
-@logado
+@admin
 def excluir(pid):
-    db().execute("DELETE FROM produtos WHERE id=? AND usuario_id=?", (pid, session["uid"]))
+    db().execute("DELETE FROM produtos WHERE id=? AND usuario_id=?", (pid, loja()))
     db().commit()
+    return jsonify(ok=True)
+
+
+def registrar_venda(itens, d):
+    """Vende vários itens de uma vez, tudo ou nada. itens = [(produto_id, quantidade)]."""
+    entregue = str(d.get("entregue_por", "")).strip()[:80]
+    recebido = str(d.get("recebido_por", "")).strip()[:80]
+    contato = str(d.get("contato", "")).strip()[:120]
+    if not entregue or not recebido:
+        return jsonify(erro="Informe quem entregou e quem recebeu."), 400
+    if not itens:
+        return jsonify(erro="Adicione pelo menos um produto."), 400
+    uid, cx = loja(), db()
+    for pid, qtd in itens:
+        p = cx.execute("SELECT nome, venda, custo, qtd FROM produtos WHERE id=? AND usuario_id=?", (pid, uid)).fetchone()
+        if not p:
+            cx.rollback()
+            return jsonify(erro="Produto não encontrado."), 404
+        cur = cx.execute(
+            "UPDATE produtos SET qtd=qtd-? WHERE id=? AND usuario_id=? AND qtd>=?", (qtd, pid, uid, qtd))
+        if cur.rowcount == 0:
+            cx.rollback()
+            return jsonify(erro=f"Estoque insuficiente de {p['nome']} (tem {p['qtd']})."), 409
+        cx.execute(
+            "INSERT INTO movimentacoes(usuario_id,produto_id,produto_nome,tipo,quantidade,entregue_por,recebido_por,contato,"
+            "preco_venda,preco_custo,registrado_por) VALUES(?,?,?,'venda',?,?,?,?,?,?,?)",
+            (uid, pid, p["nome"], qtd, entregue, recebido, contato, p["venda"], p["custo"], atual()["email"]))
+    cx.commit()
     return jsonify(ok=True)
 
 
 @app.post("/api/produtos/<int:pid>/venda")
 @logado
 def vender(pid):
+    return registrar_venda([(pid, 1)], request.get_json(silent=True) or {})
+
+
+@app.post("/api/vendas")
+@logado
+def vendas():
     d = request.get_json(silent=True) or {}
-    entregue = str(d.get("entregue_por", "")).strip()[:80]
-    recebido = str(d.get("recebido_por", "")).strip()[:80]
-    if not entregue or not recebido:
-        return jsonify(erro="Informe quem entregou e quem recebeu."), 400
-    uid, cx = session["uid"], db()
-    p = cx.execute("SELECT nome, venda, custo FROM produtos WHERE id=? AND usuario_id=?", (pid, uid)).fetchone()
-    if not p:
-        return jsonify(erro="Produto não encontrado."), 404
-    cur = cx.execute("UPDATE produtos SET qtd=qtd-1 WHERE id=? AND usuario_id=? AND qtd>=1", (pid, uid))
-    if cur.rowcount == 0:
-        return jsonify(erro="Esse produto está sem estoque."), 409
-    cx.execute(
-        "INSERT INTO movimentacoes(usuario_id,produto_id,produto_nome,tipo,quantidade,entregue_por,recebido_por,preco_venda,preco_custo) VALUES(?,?,?,'venda',1,?,?,?,?)",
-        (uid, pid, p["nome"], entregue, recebido, p["venda"], p["custo"]))
-    cx.commit()
-    return jsonify(ok=True)
+    soma = {}
+    try:
+        for it in d.get("itens", []):
+            pid, qtd = int(it["produto_id"]), int(it["quantidade"])
+            if not 1 <= qtd <= 100000:
+                raise ValueError
+            soma[pid] = soma.get(pid, 0) + qtd
+    except (KeyError, TypeError, ValueError):
+        return jsonify(erro="Confira os produtos e as quantidades."), 400
+    if len(soma) > 100:
+        return jsonify(erro="No máximo 100 produtos por venda."), 400
+    return registrar_venda(list(soma.items()), d)
 
 
 @app.post("/api/produtos/<int:pid>/entrada")
-@logado
+@admin
 def entrada(pid):
     d = request.get_json(silent=True) or {}
     try:
@@ -276,14 +355,14 @@ def entrada(pid):
     recebido = str(d.get("recebido_por", "")).strip()[:80]
     if not entregue or not recebido:
         return jsonify(erro="Informe quem entregou e quem recebeu."), 400
-    uid, cx = session["uid"], db()
+    uid, cx = loja(), db()
     p = cx.execute("SELECT nome, venda, custo FROM produtos WHERE id=? AND usuario_id=?", (pid, uid)).fetchone()
     if not p:
         return jsonify(erro="Produto não encontrado."), 404
     cx.execute("UPDATE produtos SET qtd=qtd+? WHERE id=? AND usuario_id=?", (qtd, pid, uid))
     cx.execute(
-        "INSERT INTO movimentacoes(usuario_id,produto_id,produto_nome,tipo,quantidade,entregue_por,recebido_por,preco_venda,preco_custo) VALUES(?,?,?,'entrada',?,?,?,?,?)",
-        (uid, pid, p["nome"], qtd, entregue, recebido, p["venda"], p["custo"]))
+        "INSERT INTO movimentacoes(usuario_id,produto_id,produto_nome,tipo,quantidade,entregue_por,recebido_por,preco_venda,preco_custo,registrado_por) VALUES(?,?,?,'entrada',?,?,?,?,?,?)",
+        (uid, pid, p["nome"], qtd, entregue, recebido, p["venda"], p["custo"], atual()["email"]))
     cx.commit()
     return jsonify(ok=True)
 
@@ -293,8 +372,62 @@ def entrada(pid):
 @logado
 def movimentacoes():
     rows = db().execute(
-        "SELECT * FROM movimentacoes WHERE usuario_id=? ORDER BY id DESC LIMIT 200", (session["uid"],)).fetchall()
+        "SELECT * FROM movimentacoes WHERE usuario_id=? ORDER BY id DESC LIMIT 200", (loja(),)).fetchall()
     return jsonify([dict(r) for r in rows])
+
+
+@app.get("/api/me")
+@logado
+def me():
+    u = atual()
+    return jsonify(email=u["email"], papel=u["papel"])
+
+
+# ---------- api: equipe (só admin) ----------
+@app.get("/api/equipe")
+@admin
+def equipe_listar():
+    rows = db().execute(
+        "SELECT id, email, ativo FROM usuarios WHERE dono_id=? AND papel='operador' ORDER BY id", (loja(),)).fetchall()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.post("/api/equipe")
+@admin
+def equipe_criar():
+    d = request.get_json(silent=True) or {}
+    email = str(d.get("usuario", "")).strip().lower()  # o nome de usuário fica na coluna email
+    senha = str(d.get("senha", ""))
+    if not re.fullmatch(r"[a-z0-9._-]{3,30}", email):
+        return jsonify(erro="Nome de usuário: de 3 a 30 caracteres, só letras, números, ponto, traço ou sublinhado, sem espaços."), 400
+    if len(senha) < 6:
+        return jsonify(erro="A senha precisa ter pelo menos 6 caracteres."), 400
+    try:
+        db().execute(
+            "INSERT INTO usuarios(email, senha_hash, papel, dono_id) VALUES(?,?,'operador',?)",
+            (email, generate_password_hash(senha), loja()))
+        db().commit()
+    except sqlite3.IntegrityError:
+        return jsonify(erro="Esse nome de usuário já está em uso."), 409
+    return jsonify(ok=True), 201
+
+
+@app.put("/api/equipe/<int:oid>")
+@admin
+def equipe_editar(oid):
+    d = request.get_json(silent=True) or {}
+    op = db().execute(
+        "SELECT id FROM usuarios WHERE id=? AND dono_id=? AND papel='operador'", (oid, loja())).fetchone()
+    if not op:
+        return jsonify(erro="Operador não encontrado."), 404
+    if "senha" in d:
+        if len(str(d["senha"])) < 6:
+            return jsonify(erro="A senha precisa ter pelo menos 6 caracteres."), 400
+        db().execute("UPDATE usuarios SET senha_hash=? WHERE id=?", (generate_password_hash(str(d["senha"])), oid))
+    if "ativo" in d:
+        db().execute("UPDATE usuarios SET ativo=? WHERE id=?", (1 if d["ativo"] else 0, oid))
+    db().commit()
+    return jsonify(ok=True)
 
 
 @app.get("/api/relatorio")
@@ -303,7 +436,7 @@ def relatorio():
     rows = db().execute(
         "SELECT tipo, quantidade, preco_venda, preco_custo, criado_em FROM movimentacoes "
         "WHERE usuario_id=? AND criado_em >= strftime('%Y-%m-%dT%H:%M:%SZ','now','-91 days') "
-        "ORDER BY criado_em LIMIT 20000", (session["uid"],)).fetchall()
+        "ORDER BY criado_em LIMIT 20000", (loja(),)).fetchall()
     return jsonify([dict(r) for r in rows])
 
 

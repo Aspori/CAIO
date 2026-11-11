@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Equipe · Prateleira</title><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="style.css"></head>
+<body>
+<div class="app">
+  <aside class="side">
+    <a href="/" class="logo"><i></i>Prateleira</a>
+    <a href="/app.html">Produtos</a>
+    <a href="/movimentacoes.html">Movimentações</a>
+    <a href="/relatorios.html">Relatórios</a>
+    <a href="/equipe.html" class="on">Equipe</a>
+    <a href="/logout" class="exit">Sair</a>
+  </aside>
+  <main class="main">
+    <div class="head"><h1>Equipe</h1></div>
+    <div class="crud-grid">
+      <form class="card" id="form-op">
+        <h2>Novo operador</h2>
+        <p class="sub">O operador vê tudo, mas só pode vender. Cada um entra com o próprio nome de usuário e senha.</p>
+        <label for="op-usuario">Nome de usuário</label>
+        <input id="op-usuario" type="text" placeholder="caixa1" minlength="3" maxlength="30" pattern="[A-Za-z0-9._\-]{3,30}" title="De 3 a 30 caracteres: letras, números, ponto, traço ou sublinhado, sem espaços" autocomplete="off" autocapitalize="none" required>
+        <label for="op-senha">Senha</label>
+        <input id="op-senha" type="password" minlength="6" placeholder="Mínimo 6 caracteres" required>
+        <p class="erro" id="erro" role="alert"></p>
+        <div class="form-actions"><button class="btn btn-primary" type="submit">Criar operador</button></div>
+      </form>
+      <div class="card table-wrap">
+        <table>
+          <thead><tr><th>Operador</th><th>Situação</th><th></th></tr></thead>
+          <tbody id="lista"></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+<dialog id="dlg-senha" class="modal">
+  <form id="form-senha">
+    <h2>Trocar senha</h2>
+    <p class="sub" id="senha-quem"></p>
+    <label for="nova-senha">Nova senha</label>
+    <input id="nova-senha" type="password" minlength="6" placeholder="Mínimo 6 caracteres" required>
+    <p class="erro" id="erro-senha" role="alert"></p>
+    <div class="form-actions"><button class="btn btn-primary" type="submit">Salvar senha</button><button class="btn btn-ghost" type="button" id="cancela-senha">Cancelar</button></div>
+  </form>
+</dialog>
+<script>
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let equipe=[],alvo=null;
+async function api(url,opts={}){
+  const r=await fetch(url,{headers:{'Content-Type':'application/json'},...opts});
+  if(r.status===401){location.href='/login.html';throw new Error('login')}
+  const d=await r.json().catch(()=>({}));
+  if(!r.ok)throw new Error(d.erro||'Algo deu errado. Tente de novo.');
+  return d;
+}
+function render(){
+  $('lista').innerHTML=equipe.length?equipe.map(u=>`<tr><td>${esc(u.email)}</td><td><span class="badge ${u.ativo?'b-ok':'b-bad'}">${u.ativo?'Ativo':'Desativado'}</span></td><td><div class="acts"><button class="btn btn-ghost btn-sm" data-senha="${u.id}">Trocar senha</button><button class="btn btn-ghost btn-sm" data-ativo="${u.id}">${u.ativo?'Desativar':'Ativar'}</button></div></td></tr>`).join(''):'<tr><td colspan="3">Nenhum operador ainda. Crie o primeiro ao lado.</td></tr>';
+}
+async function carregar(){equipe=await api('/api/equipe');render()}
+$('form-op').addEventListener('submit',async e=>{
+  e.preventDefault();$('erro').textContent='';
+  try{
+    await api('/api/equipe',{method:'POST',body:JSON.stringify({usuario:$('op-usuario').value,senha:$('op-senha').value})});
+    $('form-op').reset();await carregar();
+  }catch(err){$('erro').textContent=err.message}
+});
+document.addEventListener('click',async e=>{
+  const s=e.target.closest('[data-senha]'),a=e.target.closest('[data-ativo]');
+  if(s){alvo=+s.dataset.senha;$('senha-quem').textContent=equipe.find(u=>u.id===alvo).email;$('form-senha').reset();$('erro-senha').textContent='';$('dlg-senha').showModal();$('nova-senha').focus()}
+  if(a){const u=equipe.find(x=>x.id===+a.dataset.ativo);await api(`/api/equipe/${u.id}`,{method:'PUT',body:JSON.stringify({ativo:!u.ativo})});await carregar()}
+});
+$('form-senha').addEventListener('submit',async e=>{
+  e.preventDefault();$('erro-senha').textContent='';
+  try{await api(`/api/equipe/${alvo}`,{method:'PUT',body:JSON.stringify({senha:$('nova-senha').value})});$('dlg-senha').close()}
+  catch(err){$('erro-senha').textContent=err.message}
+});
+$('cancela-senha').addEventListener('click',()=>$('dlg-senha').close());
+carregar();
+</script>
+</body></html>

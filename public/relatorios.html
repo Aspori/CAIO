@@ -7,6 +7,7 @@
     <a href="/app.html">Produtos</a>
     <a href="/movimentacoes.html">Movimentações</a>
     <a href="/relatorios.html" class="on">Relatórios</a>
+    <a href="/equipe.html" id="menu-equipe" hidden>Equipe</a>
     <a href="/logout" class="exit">Sair</a>
   </aside>
   <main class="main">
@@ -34,6 +35,7 @@
 </div>
 <script>
 const $=id=>document.getElementById(id);
+fetch('/api/me').then(r=>r.ok?r.json():null).then(u=>{if(u&&u.papel==='admin')$('menu-equipe').hidden=false});
 const METRICAS={
   vendas:{nome:'Vendas',un:'R$',f:m=>m.tipo==='venda'?m.quantidade*(m.preco_venda||0):0},
   lucro:{nome:'Lucro',un:'R$',f:m=>m.tipo==='venda'?m.quantidade*((m.preco_venda||0)-(m.preco_custo||0)):0},
